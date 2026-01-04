@@ -1,0 +1,33 @@
+---
+# Interface name
+wireguard_interface: "wg0"
+
+# Listen port
+wireguard_port: 51820
+
+# VPN subnet (e.g., 10.0.0.0/24)
+wireguard_address: "10.0.0.1/24"
+
+# Private key (leave empty to generate automatically)
+wireguard_private_key: ""
+
+# Enable NAT/masquerade for internet access
+wireguard_nat_enabled: true
+
+# Network interface for NAT (auto-detect if empty)
+wireguard_nat_interface: ""
+
+# Enable IP forwarding
+wireguard_ip_forward: true
+
+# DNS for clients (optional)
+wireguard_dns: ""
+
+# Additional PostUp commands
+wireguard_postup_extra: ""
+
+# Additional PostDown commands
+wireguard_postdown_extra: ""
+
+# Force config deployment even if peers exist (WARNING: will remove all peers!)
+wireguard_force_config: false

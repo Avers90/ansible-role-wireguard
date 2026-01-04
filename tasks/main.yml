@@ -1,0 +1,136 @@
+---
+- name: wireguard | Fail if distro is not supported
+  ansible.builtin.fail:
+    msg: "Distribution '{{ ansible_distribution }}' is not supported. Supported: Debian, Ubuntu"
+  when: ansible_distribution not in ['Debian', 'Ubuntu']
+
+- name: wireguard | Install WireGuard
+  ansible.builtin.apt:
+    name:
+      - wireguard
+      - wireguard-tools
+    state: present
+    update_cache: true
+
+- name: wireguard | Detect default network interface for NAT
+  ansible.builtin.shell: ip route | grep default | awk '{print $5}' | head -1
+  register: default_interface
+  changed_when: false
+  when: wireguard_nat_enabled and wireguard_nat_interface == ""
+
+- name: wireguard | Set NAT interface
+  ansible.builtin.set_fact:
+    wireguard_nat_interface_actual: "{{ wireguard_nat_interface | default(default_interface.stdout, true) }}"
+  when: wireguard_nat_enabled
+
+- name: wireguard | Check if WireGuard config exists
+  ansible.builtin.stat:
+    path: "/etc/wireguard/{{ wireguard_interface }}.conf"
+  register: wg_config_file
+
+- name: wireguard | Check if config has peers
+  ansible.builtin.shell: grep -c '^\[Peer\]' /etc/wireguard/{{ wireguard_interface }}.conf || echo 0
+  register: wg_peers_count
+  changed_when: false
+  when: wg_config_file.stat.exists
+
+- name: wireguard | Set peers exist fact
+  ansible.builtin.set_fact:
+    wireguard_peers_exist: "{{ wg_config_file.stat.exists and (wg_peers_count.stdout | default('0') | int > 0) }}"
+
+- name: wireguard | Display peers status
+  ansible.builtin.debug:
+    msg: "WireGuard config has {{ wg_peers_count.stdout | default('0') }} peer(s). Config will {{ 'NOT be modified' if (wireguard_peers_exist and not wireguard_force_config) else 'be deployed' }}."
+
+- name: wireguard | Check if private key exists
+  ansible.builtin.stat:
+    path: "/etc/wireguard/{{ wireguard_interface }}_privatekey"
+  register: privatekey_file
+
+- name: wireguard | Generate private key
+  ansible.builtin.shell: wg genkey
+  register: generated_private_key
+  when: wireguard_private_key == "" and not privatekey_file.stat.exists
+  no_log: true
+
+- name: wireguard | Save private key to file
+  ansible.builtin.copy:
+    content: "{{ generated_private_key.stdout }}"
+    dest: "/etc/wireguard/{{ wireguard_interface }}_privatekey"
+    owner: root
+    group: root
+    mode: "0600"
+  when: wireguard_private_key == "" and not privatekey_file.stat.exists
+  no_log: true
+
+- name: wireguard | Read existing private key
+  ansible.builtin.slurp:
+    src: "/etc/wireguard/{{ wireguard_interface }}_privatekey"
+  register: existing_private_key
+  when: privatekey_file.stat.exists
+  no_log: true
+
+- name: wireguard | Set private key fact (generated)
+  ansible.builtin.set_fact:
+    wireguard_private_key_actual: "{{ generated_private_key.stdout }}"
+  when: wireguard_private_key == "" and not privatekey_file.stat.exists
+  no_log: true
+
+- name: wireguard | Set private key fact (existing)
+  ansible.builtin.set_fact:
+    wireguard_private_key_actual: "{{ existing_private_key.content | b64decode | trim }}"
+  when: privatekey_file.stat.exists
+  no_log: true
+
+- name: wireguard | Set private key fact (provided)
+  ansible.builtin.set_fact:
+    wireguard_private_key_actual: "{{ wireguard_private_key }}"
+  when: wireguard_private_key != ""
+  no_log: true
+
+- name: wireguard | Generate public key
+  ansible.builtin.shell: echo "{{ wireguard_private_key_actual }}" | wg pubkey
+  register: public_key
+  changed_when: false
+  no_log: true
+
+- name: wireguard | Save public key to file
+  ansible.builtin.copy:
+    content: "{{ public_key.stdout }}"
+    dest: "/etc/wireguard/{{ wireguard_interface }}_publickey"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: wireguard | Display public key
+  ansible.builtin.debug:
+    msg: "WireGuard public key: {{ public_key.stdout }}"
+
+- name: wireguard | Enable IP forwarding
+  ansible.posix.sysctl:
+    name: net.ipv4.ip_forward
+    value: "1"
+    state: present
+    reload: true
+  when: wireguard_ip_forward
+
+- name: wireguard | Deploy WireGuard configuration
+  ansible.builtin.template:
+    src: wg.conf.j2
+    dest: "/etc/wireguard/{{ wireguard_interface }}.conf"
+    owner: root
+    group: root
+    mode: "0600"
+  notify: Restart WireGuard
+  when: not wireguard_peers_exist or wireguard_force_config
+
+- name: wireguard | Skip config deployment (peers exist)
+  ansible.builtin.debug:
+    msg: "Skipping config deployment - {{ wg_peers_count.stdout }} peer(s) found. Manage peers via WGDashboard."
+  when: wireguard_peers_exist and not wireguard_force_config
+
+- name: wireguard | Enable and start WireGuard
+  ansible.builtin.systemd:
+    name: "wg-quick@{{ wireguard_interface }}"
+    enabled: true
+    state: started
