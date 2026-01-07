@@ -1,33 +1,27 @@
 ---
-# Interface name
+## WireGuard interface name
 wireguard_interface: "wg0"
 
-# Listen port
-wireguard_port: 51820
-
-# VPN subnet (e.g., 10.0.0.0/24)
+## Server address in CIDR notation
 wireguard_address: "10.0.0.1/24"
 
-# Private key (leave empty to generate automatically)
+## Listen port
+wireguard_port: 51820
+
+## Private key (leave empty to generate)
 wireguard_private_key: ""
 
-# Enable NAT/masquerade for internet access
-wireguard_nat_enabled: true
+## DNS for clients (usually AdGuard Home on WireGuard IP)
+wireguard_dns: "{{ wireguard_address | ansible.utils.ipaddr('address') }}"
 
-# Network interface for NAT (auto-detect if empty)
-wireguard_nat_interface: ""
-
-# Enable IP forwarding
+## Enable IP forwarding
 wireguard_ip_forward: true
 
-# DNS for clients (optional)
-wireguard_dns: ""
+## NAT settings (now managed by firewall role)
+## These are kept for backward compatibility but DEPRECATED
+## Use firewall role instead
+wireguard_nat_enabled: false
+wireguard_nat_interface: ""
 
-# Additional PostUp commands
-wireguard_postup_extra: ""
-
-# Additional PostDown commands
-wireguard_postdown_extra: ""
-
-# Force config deployment even if peers exist (WARNING: will remove all peers!)
+## Force config deployment even if peers exist
 wireguard_force_config: false

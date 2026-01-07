@@ -12,17 +12,6 @@
     state: present
     update_cache: true
 
-- name: wireguard | Detect default network interface for NAT
-  ansible.builtin.shell: ip route | grep default | awk '{print $5}' | head -1
-  register: default_interface
-  changed_when: false
-  when: wireguard_nat_enabled and wireguard_nat_interface == ""
-
-- name: wireguard | Set NAT interface
-  ansible.builtin.set_fact:
-    wireguard_nat_interface_actual: "{{ wireguard_nat_interface | default(default_interface.stdout, true) }}"
-  when: wireguard_nat_enabled
-
 - name: wireguard | Check if WireGuard config exists
   ansible.builtin.stat:
     path: "/etc/wireguard/{{ wireguard_interface }}.conf"
@@ -134,3 +123,16 @@
     name: "wg-quick@{{ wireguard_interface }}"
     enabled: true
     state: started
+
+- name: wireguard | Display completion message
+  ansible.builtin.debug:
+    msg: |
+      WireGuard installed successfully!
+
+      Interface: {{ wireguard_interface }}
+      Address: {{ wireguard_address }}
+      Port: {{ wireguard_port }}
+      Public Key: {{ public_key.stdout }}
+
+      NOTE: iptables/NAT rules are managed by ansible-role-firewall.
+      Run firewall role to complete the setup.
