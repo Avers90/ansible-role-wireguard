@@ -22,12 +22,8 @@ Other distributions will fail with an error message.
 | `wireguard_port` | `51820` | Listen port |
 | `wireguard_address` | `10.0.0.1/24` | VPN subnet and server IP |
 | `wireguard_private_key` | `""` | Private key (auto-generate if empty) |
-| `wireguard_nat_enabled` | `true` | Enable NAT/masquerade |
-| `wireguard_nat_interface` | `""` | NAT interface (auto-detect if empty) |
 | `wireguard_ip_forward` | `true` | Enable IP forwarding |
 | `wireguard_dns` | `""` | DNS for clients |
-| `wireguard_postup_extra` | `""` | Additional PostUp commands |
-| `wireguard_postdown_extra` | `""` | Additional PostDown commands |
 | `wireguard_force_config` | `false` | Force config deployment (removes peers!) |
 
 ## Private Key Handling
@@ -102,17 +98,15 @@ wireguard_address: "172.16.0.1/24"
 wireguard_dns: "1.1.1.1, 8.8.8.8"
 ```
 
-### Disable NAT (for site-to-site)
+## NAT Configuration
+
+NAT is now managed by the `firewall` role instead of WireGuard PostUp/PostDown scripts.
+Enable WireGuard NAT in the firewall role:
 
 ```yaml
-wireguard_nat_enabled: false
-```
-
-### Additional iptables rules
-
-```yaml
-wireguard_postup_extra: "iptables -A INPUT -p udp --dport 51820 -j ACCEPT"
-wireguard_postdown_extra: "iptables -D INPUT -p udp --dport 51820 -j ACCEPT"
+firewall_wireguard_enabled: true
+firewall_wireguard_interface: "wg0"
+firewall_wireguard_network: "10.0.0.0/24"
 ```
 
 ## Output
